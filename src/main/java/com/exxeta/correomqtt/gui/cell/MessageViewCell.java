@@ -147,8 +147,9 @@ public class MessageViewCell extends ListCell<MessagePropertiesDTO> {
 
     private void executeOnCreateMessageEntryExtensions(MessagePropertiesDTO messageDTO) {
         labelBox.getChildren().clear();
-        PluginSystem.getInstance().getExtensions(MessageListHook.class)
-                .forEach(p -> p.onCreateEntry(new MessageExtensionDTO(messageDTO), labelBox));
+        PluginSystem.getInstance().executeExtensions(MessageListHook.class, extensions -> {
+            extensions.forEach(p -> p.onCreateEntry(new MessageExtensionDTO(messageDTO), labelBox));
+        });
     }
 
     private void validateMessage(MessagePropertiesDTO messageDTO) {

@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class PluginSystem extends DefaultPluginManager {
@@ -62,6 +64,49 @@ public class PluginSystem extends DefaultPluginManager {
             instance = new PluginSystem();
         }
         return instance;
+    }
+
+    public <T, R> R executeExtensions(Class<T> type, Function<List<T>, R> function) throws PluginExecutionException {
+        try {
+            return function.apply(getExtensions(type));
+        } catch (Exception e) {
+            LOGGER.warn("Extension for type '" + type.getSimpleName() + "' encountered an exception: " + e.getLocalizedMessage());
+            return null;
+        }
+    }
+
+    public <T> void executeExtensions(Class<T> type, Consumer<List<T>> consumer) throws PluginExecutionException {
+        try {
+            consumer.accept(getExtensions(type));
+        } catch (Exception e) {
+            LOGGER.warn("Extension for type '" + type.getSimpleName() + "' encountered an exception: " + e.getLocalizedMessage());
+        }
+    }
+
+    public <T, R> R executeExtension(T extension, Function<T, R> function) throws PluginExecutionException {
+        try {
+            return function.apply(extension);
+        } catch (Exception e) {
+            LOGGER.warn("Extension '" + extension.getClass().getSimpleName() + "' encountered an exception: " + e.getLocalizedMessage());
+            return null;
+        }
+    }
+
+    public <T> void executeExtension(T extension, Consumer<T> consumer) throws PluginExecutionException {
+        try {
+            consumer.accept(extension);
+        } catch (Exception e) {
+            LOGGER.warn("Extension '" + extension.getClass().getSimpleName() + "' encountered an exception: " + e.getLocalizedMessage());
+        }
+    }
+
+    public <T, R> R executeTask(Task<T> task, Function<List<T>, R> function) throws PluginExecutionException {
+        try {
+            return function.apply(task.getTasks());
+        } catch (Exception e) {
+            LOGGER.warn("Task '" + task.getId() + "' encountered an exception: " + e.getLocalizedMessage());
+            return null;
+        }
     }
 
     @Override

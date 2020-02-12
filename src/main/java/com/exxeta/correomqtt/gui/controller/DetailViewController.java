@@ -132,11 +132,14 @@ public class DetailViewController extends BaseConnectionController implements
 
     private MessagePropertiesDTO messageDTO;
     private DetailContextMenu contextMenu;
+
+    private PluginSystem pluginSystem;
     private Task<DetailViewManipulatorHook> lastManipulatorTask;
 
     private DetailViewController(String connectionId, DetailViewDelegate delegate, boolean isInlineView) {
         super(connectionId);
         this.delegate = delegate;
+        this.pluginSystem = PluginSystem.getInstance();
         inlineViewProperty = new SimpleBooleanProperty(isInlineView);
         ExportMessageDispatcher.getInstance().addObserver(this);
         ImportMessageDispatcher.getInstance().addObserver(this);
@@ -233,17 +236,20 @@ public class DetailViewController extends BaseConnectionController implements
         lastManipulatorTask = null;
         manipulateSelectionButton.setText("Manipulate");
 
-        List<Task<DetailViewManipulatorHook>> tasks = PluginSystem.getInstance().getTasks(DetailViewManipulatorHook.class);
-        tasks.forEach(p -> {
-            TaskMenuItem<DetailViewManipulatorHook> menuItem = new TaskMenuItem<>(p);
+        List<Task<DetailViewManipulatorHook>> tasks = pluginSystem.getTasks(DetailViewManipulatorHook.class);
+        tasks.forEach(t -> {
+            TaskMenuItem<DetailViewManipulatorHook> menuItem = new TaskMenuItem<>(t);
             menuItem.setOnAction(this::onManipulateMessageSelected);
             manipulateSelectionButton.getItems().add(menuItem);
         });
+        boolean showManipulationButtons = !tasks.isEmpty();
         manipulateSelectionButton.setOnMouseClicked(this::onManipulateMessageClicked);
-        manipulateSelectionButton.setVisible(!tasks.isEmpty());
-        manipulateSelectionButton.setManaged(!tasks.isEmpty());
+        manipulateSelectionButton.setVisible(showManipulationButtons);
+        manipulateSelectionButton.setManaged(showManipulationButtons);
 
         detailViewRevertManipulationButton.setOnMouseClicked(e -> showMessage());
+        detailViewRevertManipulationButton.setVisible(showManipulationButtons);
+        detailViewRevertManipulationButton.setManaged(showManipulationButtons);
     }
 
     @FXML
@@ -339,12 +345,14 @@ public class DetailViewController extends BaseConnectionController implements
 
     private void executeOnOpenDetailViewExtensions() {
         detailViewNodeBox.getChildren().clear();
-        PluginSystem.getInstance().getExtensions(DetailViewHook.class).forEach(p -> {
-            HBox pluginBox = new HBox();
-            pluginBox.setAlignment(Pos.CENTER_RIGHT);
-            HBox.setHgrow(pluginBox, Priority.ALWAYS);
-            detailViewNodeBox.getChildren().add(pluginBox);
-            p.onOpenDetailView(new MessageExtensionDTO(messageDTO), pluginBox);
+        pluginSystem.executeExtensions(DetailViewHook.class, extensions -> {
+            extensions.forEach(p -> {
+                HBox pluginBox = new HBox();
+                pluginBox.setAlignment(Pos.CENTER_RIGHT);
+                HBox.setHgrow(pluginBox, Priority.ALWAYS);
+                detailViewNodeBox.getChildren().add(pluginBox);
+                p.onOpenDetailView(new MessageExtensionDTO(messageDTO), pluginBox);
+            });
         });
     }
 
@@ -385,10 +393,7 @@ public class DetailViewController extends BaseConnectionController implements
 
         IndexRange range = getSelectionRange();
 
-        byte[] selection = codeArea.getText(range).getBytes();
-        for (DetailViewManipulatorHook hook : manipulatorTask.getTasks()) {
-            selection = hook.manipulate(selection);
-        }
+        byte[] selection = executeManipulationTask(manipulatorTask, codeArea.getText(range).getBytes());
 
         codeArea.replaceText(range, new String(selection));
         detailViewFormatToggleButton.setSelected(false);
@@ -397,6 +402,16 @@ public class DetailViewController extends BaseConnectionController implements
             validateMessage(messageDTO.getTopic(), codeArea.getText());
             autoFormatPayload(codeArea.getText(), true);
         }
+    }
+
+    private byte[] executeManipulationTask(Task<DetailViewManipulatorHook> manipulatorTask, byte[] selection) {
+        return pluginSystem.executeTask(manipulatorTask, tasks -> {
+            byte[] bytes = selection;
+            for (DetailViewManipulatorHook m : manipulatorTask.getTasks()) {
+                bytes = m.manipulate(bytes);
+            }
+            return bytes;
+        });
     }
 
     private IndexRange getSelectionRange() {
@@ -441,8 +456,10 @@ public class DetailViewController extends BaseConnectionController implements
         codeArea.setEditable(false);
 
         Format format = autoFormatPayload(payload, true);
-        detailViewFormatToggleButton.setSelected(format.isFormatable());
-        detailViewFormatToggleButton.setDisable(!format.isFormatable());
+        pluginSystem.executeExtension(format, extension -> {
+            detailViewFormatToggleButton.setSelected(extension.isFormatable());
+            detailViewFormatToggleButton.setDisable(!extension.isFormatable());
+        });
     }
 
     private void clearPayload() {
@@ -482,14 +499,14 @@ public class DetailViewController extends BaseConnectionController implements
         Format foundFormat;
         if (doFormatting) {
             // Find the first format that is valid.
-            ArrayList<Format> availableFormats = new ArrayList<>(PluginSystem.getInstance().getExtensions(DetailViewFormatHook.class));
+            ArrayList<Format> availableFormats = new ArrayList<>(pluginSystem.getExtensions(DetailViewFormatHook.class));
             availableFormats.add(new Plain());
             foundFormat = availableFormats.stream()
                     .filter(Objects::nonNull)
-                    .filter(format -> {
-                                format.setText(payload);
-                                return format.isValid();
-                            }
+                    .filter(format -> pluginSystem.executeExtension(format, extension -> {
+                                extension.setText(payload);
+                                return extension.isValid();
+                            })
                     )
                     .findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("Plain format did not match."));
@@ -499,9 +516,11 @@ public class DetailViewController extends BaseConnectionController implements
         }
 
         codeArea.clear();
-        codeArea.replaceText(0, 0, foundFormat.getPrettyString());
-        codeArea.setStyleSpans(0, foundFormat.getFxSpans());
-        return foundFormat;
+        return pluginSystem.executeExtension(foundFormat, extension -> {
+            codeArea.replaceText(0, 0, extension.getPrettyString());
+            codeArea.setStyleSpans(0, extension.getFxSpans());
+            return extension;
+        });
     }
 
     private void showSearchResult() {

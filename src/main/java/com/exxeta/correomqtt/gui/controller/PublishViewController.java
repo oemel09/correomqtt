@@ -110,11 +110,13 @@ public class PublishViewController extends BaseMessageBasedViewController implem
         qosComboBox.getSelectionModel().selectFirst();
         qosComboBox.setCellFactory(QosCell::new);
 
-        pluginSystem.getExtensions(PublishMenuHook.class).forEach(p -> {
-            HBox pluginBox = new HBox();
-            pluginBox.setAlignment(Pos.CENTER_RIGHT);
-            pluginControlBox.getChildren().add(pluginBox);
-            p.onInstantiatePublishMenu(getConnectionId(), pluginBox);
+        pluginSystem.executeExtensions(PublishMenuHook.class, extensions -> {
+            extensions.forEach(e -> {
+                HBox pluginBox = new HBox();
+                pluginBox.setAlignment(Pos.CENTER_RIGHT);
+                pluginControlBox.getChildren().add(pluginBox);
+                e.onInstantiatePublishMenu(getConnectionId(), pluginBox);
+            });
         });
 
         topicComboBox.getEditor().lengthProperty().addListener(((observable, oldValue, newValue) -> CheckTopicHelper.checkPublishTopic(topicComboBox, false)));
@@ -276,8 +278,9 @@ public class PublishViewController extends BaseMessageBasedViewController implem
     }
 
     private void executeOnCopyMessageToFormExtensions(MessagePropertiesDTO messageDTO) {
-        pluginSystem.getExtensions(MessageContextMenuHook.class)
-                .forEach(p -> p.onCopyMessageToPublishForm(getConnectionId(), new MessageExtensionDTO(messageDTO)));
+        pluginSystem.executeExtensions(MessageContextMenuHook.class, extensions -> {
+            extensions.forEach(p -> p.onCopyMessageToPublishForm(getConnectionId(), new MessageExtensionDTO(messageDTO)));
+        });
     }
 
     @Override

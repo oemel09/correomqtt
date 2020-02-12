@@ -26,11 +26,13 @@ public class TaskFactory {
     }
 
     private static MessagePropertiesDTO executeOnPublishMessageExtensions(String connectionId, MessagePropertiesDTO messagePropertiesDTO) {
-        MessageExtensionDTO messageExtensionDTO = new MessageExtensionDTO(messagePropertiesDTO);
-        for (PublishMessageHook p : PluginSystem.getInstance().getExtensions(PublishMessageHook.class)) {
-            messageExtensionDTO = p.onPublishMessage(connectionId, messageExtensionDTO);
-        }
-        return messageExtensionDTO.merge(messagePropertiesDTO);
+        return PluginSystem.getInstance().executeExtensions(PublishMessageHook.class, extensions -> {
+            MessageExtensionDTO messageExtensionDTO = new MessageExtensionDTO(messagePropertiesDTO);
+            for (PublishMessageHook e : extensions) {
+                messageExtensionDTO = e.onPublishMessage(connectionId, messageExtensionDTO);
+            }
+            return messageExtensionDTO.merge(messagePropertiesDTO);
+        });
     }
 
     public static void subscribe(String connectionId, SubscriptionPropertiesDTO subscriptionDTO) {

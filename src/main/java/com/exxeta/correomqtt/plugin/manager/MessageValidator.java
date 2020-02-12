@@ -16,11 +16,13 @@ public class MessageValidator {
                 .findFirst();
         if (validatorTaskOptional.isEmpty()) return null;
 
-        MessageValidatorHook.Validation validation = null;
-        for (MessageValidatorHook v : validatorTaskOptional.get().getTasks()) {
-            validation = v.isMessageValid(payload);
-            if (validation.isValid()) break;
-        }
-        return validation;
+        return PluginSystem.getInstance().executeTask(validatorTaskOptional.get(), validators -> {
+            MessageValidatorHook.Validation validation = null;
+            for (MessageValidatorHook v : validators) {
+                validation = v.isMessageValid(payload);
+                if (validation.isValid()) break;
+            }
+            return validation;
+        });
     }
 }

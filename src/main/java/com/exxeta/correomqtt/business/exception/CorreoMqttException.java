@@ -7,15 +7,15 @@ import java.util.ResourceBundle;
 public abstract class CorreoMqttException extends RuntimeException {
     static ResourceBundle resources;
 
-    CorreoMqttException(){
+    CorreoMqttException() {
         resources = ResourceBundle.getBundle("com.exxeta.correomqtt.i18n", ConfigService.getInstance().getSettings().getCurrentLocale());
     }
 
-    CorreoMqttException(String message){
+    CorreoMqttException(String message) {
         super(message);
     }
 
-    CorreoMqttException(Throwable cause) {
+    protected CorreoMqttException(Throwable cause) {
         super(cause);
     }
 
